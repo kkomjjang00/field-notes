@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>안전진단 야장 프로그램</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; background: #f1f5f9; }
+        /* 상단 데이터 테이블 */
+        #table-area { flex: 1; overflow: auto; background: #fff; border-bottom: 2px solid #cbd5e1; }
+        table { width: 100%; border-collapse: collapse; min-width: 1200px; font-size: 13px; }
+        th { background: #e2e8f0; position: sticky; top: 0; padding: 10px; border: 1px solid #94a3b8; }
+        td { padding: 8px; border: 1px solid #cbd5e1; text-align: center; }
+        
+        /* 하단 입력 컨트롤 */
+        #input-area { height: 450px; background: #f8fafc; display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 10px; padding: 10px; box-sizing: border-box; }
+        .box { background: #fff; border-radius: 8px; border: 1px solid #cbd5e1; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .title { font-weight: bold; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; margin-bottom: 5px; }
+
+        /* 버튼 스타일 */
+        .btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+        button { padding: 12px 5px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer; font-size: 14px; }
+        button:active { background: #e2e8f0; transform: scale(0.98); }
+        .selected { background: #2563eb !important; color: white !important; }
+        
+        /* 키패드 */
+        .keypad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; flex: 1; }
+        .key { height: 50px; font-weight: bold; background: #f8fafc; }
+        .key.blue { background: #2563eb; color: white; grid-column: span 2; }
+        
+        /* 입력창 강조 */
+        .active-field { background: #dbeafe !important; border: 2px solid #2563eb !important; }
+    </style>
+</head>
+<body>
+
+<div id="table-area">
+    <table>
+        <thead>
+            <tr>
+                <th>수정/삭제</th><th>구분</th><th>층</th><th>실</th><th>부재</th><th>유형 및 형상</th>
+                <th>폭(mm)</th><th>길이(mm)</th><th>개소(EA)</th><th>손상원인</th><th>비고</th><th>사진번호</th><th>파일번호</th>
+            </tr>
+        </thead>
+        <tbody id="data-list"></tbody>
+    </table>
+</div>
+
+<div id="input-area">
+    <div class="box">
+        <div class="title">층수 & 기본 정보</div>
+        <div class="btn-grid">
+            <button id="f-down" onclick="setFType('지하')">지하</button>
+            <button id="f-up" class="selected" onclick="setFType('지상')">지상</button>
+            <button onclick="setRF()">지붕층</button>
+        </div>
+        <input type="text" id="f-display" placeholder="층수 조합" readonly style="padding: 10px; text-align: center; font-weight: bold;">
+        <div class="btn-grid">
+            <button onclick="setVal('part','철골보')">철골보</button>
+            <button onclick="setVal('part','트러스')">트러스</button>
+            <button onclick="setVal('part','기타')">기타</button>
+        </div>
+    </div>
+
+    <div class="box">
+        <div class="title">규격 입력 (폭/길이/개소)</div>
+        <div class="btn-grid" style="grid-template-columns: repeat(3, 1fr);">
+            <button id="b-w" class="selected" onclick="selCol('w')">폭</button>
+            <button id="b-l" onclick="selCol('l')">길이</button>
+            <button id="b-e" onclick="selCol('e')">개소</button>
+        </div>
+        <div class="keypad">
+            <button class="key" onclick="k('7')">7</button><button class="key" onclick="k('8')">8</button><button class="key" onclick="k('9')">9</button><button class="key" onclick="k('x')">x</button>
+            <button class="key" onclick="k('4')">4</button><button class="key" onclick="k('5')">5</button><button class="key" onclick="k('6')">6</button><button class="key" onclick="k('-')">-</button>
+            <button class="key" onclick="k('1')">1</button><button class="key" onclick="k('2')">2</button><button class="key" onclick="k('3')">3</button><button class="key" onclick="k('.')">.</button>
+            <button class="key" onclick="k('0')">0</button><button class="key" onclick="k('전반적')">전반</button><button class="key" onclick="kBk()">⌫</button><button class="key" onclick="selNext()">Next</button>
+            <button class="key blue" onclick="addRow()" style="margin-top: 5px;">저장 (행 추가)</button>
+        </div>
+    </div>
+
+    <div class="box">
+        <div class="title">사진 관리</div>
+        <input type="text" id="p-seq" placeholder="사진번호(자동)" readonly style="padding:10px; text-align:center;">
+        <button onclick="genP()">번호 생성 (+1)</button>
+        <input type="text" id="p-file" placeholder="파일번호 4자리" maxlength="4" style="padding:10px; text-align:center; margin-top:10px;">
+        <button onclick="fileUp()">파일번호 +1</button>
+    </div>
+</div>
+
+<script>
+    let fType = '지상', col = 'w', pCount = 0;
+    let data = { floor: '', part: '-', w: '', l: '', e: '' };
+
+    function setFType(t) { fType = t; document.getElementById('f-down').classList.toggle('selected', t==='지하'); document.getElementById('f-up').classList.toggle('selected', t==='지상'); }
+    function setRF() { document.getElementById('f-display').value = '지붕층'; data.floor = '지붕층'; }
+    function k(v) { 
+        if (document.getElementById('f-display').value === '' || (col === 'w' && data.w === '')) {
+            if (!isNaN(v) && data.floor !== '지붕층') { document.getElementById('f-display').value = fType + ' ' + v + '층'; data.floor = fType + ' ' + v + '층'; return; }
+        }
+        data[col] += v; updateView();
+    }
+    function updateView() { document.getElementById('b-w').innerText = '폭:'+data.w; document.getElementById('b-l').innerText = '길:'+data.l; document.getElementById('b-e').innerText = '개:'+data.e; }
+    function selCol(c) { col = c; ['w','l','e'].forEach(i => document.getElementById('b-'+i).classList.toggle('selected', i===c)); }
+    function selNext() { if(col==='w') selCol('l'); else if(col==='l') selCol('e'); }
+    function genP() { pCount++; document.getElementById('p-seq').value = String(pCount).padStart(2, '0'); }
+    function fileUp() { let v = parseInt(document.getElementById('p-file').value) || 0; document.getElementById('p-file').value = String(v+1).padStart(4, '0'); }
+    function addRow() {
+        const tb = document.getElementById('data-list');
+        const r = tb.insertRow(0);
+        r.innerHTML = `<td><button>Edit</button></td><td>${tb.rows.length}</td><td>${data.floor}</td><td>전시홀</td><td>${data.part}</td><td>박락</td><td>${data.w}</td><td>${data.l}</td><td>${data.e}</td><td>노후화</td><td>구조체</td><td>${document.getElementById('p-seq').value}</td><td>${document.getElementById('p-file').value}</td>`;
+        data.w = ''; data.l = ''; data.e = ''; updateView();
+    }
+    function setVal(f, v) { data[f] = v; }
+    function kBk() { data[col] = data[col].slice(0, -1); updateView(); }
+</script>
+</body>
+</html>
